@@ -60,8 +60,11 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final user = _supabaseClient.auth.currentUser;
       if (user != null) {
-        final response =
-            await _supabaseClient.from('patient').select().eq('patient_id', user.id).single();
+        final response = await _supabaseClient
+            .from('patient')
+            .select()
+            .eq('patient_id', user.id)
+            .single();
 
         if (response != null) {
           setState(() {
@@ -82,7 +85,9 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading profile: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading profile: $e')),
+        );
       }
     } finally {
       if (mounted) {
@@ -107,7 +112,10 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final user = _supabaseClient.auth.currentUser;
       if (user != null) {
-        await _supabaseClient.from('patient').update(_updatedData).eq('patient_id', user.id);
+        await _supabaseClient
+            .from('patient')
+            .update(_updatedData)
+            .eq('patient_id', user.id);
         
         // Refresh the data after update
         await _loadPatientData();
@@ -120,7 +128,9 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error updating profile: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating profile: $e')),
+        );
       }
     } finally {
       if (mounted) {
@@ -254,6 +264,11 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildProfileImage() {
+    final gender = _patientData['sex']?.toString().toLowerCase() ?? 'female';
+    final imagePath = 'assets/images/$gender.png';
+
+    debugPrint('Attempting to load image from: $imagePath');
+
     return Center(
       child: Column(
         children: [
@@ -266,12 +281,27 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             child: ClipOval(
               child: Image.asset(
-                'assets/images/${_patientData['sex'] ?? 'female'}.png',
+                imagePath,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('Error loading image: $error');
+                  return Container(
+                    color: Colors.white,
+                    child: const Icon(Icons.person, size: 50, color: Colors.red),
+                  );
+                },
               ),
             ),
           ),
           const SizedBox(height: 10),
+          Text(
+            'Patient ID: ${_patientData['patient_number'] ?? ''}',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
         ],
       ),
     );
@@ -292,7 +322,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
           const SizedBox(height: 20),
-
+          
           // First Name (read-only)
           _buildTextField(
             'First Name',
@@ -767,79 +797,5 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
       ),
     );
-  }
-}
-
-Future<bool> checkProfileCompletion(BuildContext context) async {
-  final supabaseClient = Supabase.instance.client;
-  final user = supabaseClient.auth.currentUser;
-
-  if (user == null) {
-    Navigator.pushReplacementNamed(context, '/login');
-    return false;
-  }
-
-  try {
-    final response = await supabaseClient.from('patient').select().eq('patient_id', user.id).single();
-
-    if (response == null) {
-      return false;
-    }
-
-    final requiredFields = [
-      'birthday',
-      'place_of_birth',
-      'house_number',
-      'street',
-      'barangay',
-      'city',
-      'province',
-      'zip_code',
-      'contact_number',
-      'civil_status',
-    ];
-
-    for (var field in requiredFields) {
-      if (response[field] == null || response[field].toString().isEmpty) {
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Complete Your Profile'),
-              content: const Text(
-                'Please complete your profile information before proceeding.',
-              ),
-              actions: <Widget>[
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfilePage(),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Complete Profile',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            );
-          },
-        );
-        return false;
-      }
-    }
-    return true;
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error checking profile: $e')));
-    return false;
   }
 }

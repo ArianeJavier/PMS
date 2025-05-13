@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
-  late final SupabaseClient client;
+  late final SupabaseClient _client;
   static const _timeoutDuration = Duration(seconds: 10);
 
   factory SupabaseService() {
@@ -21,11 +21,10 @@ class SupabaseService {
       authOptions: FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
         autoRefreshToken: true,
-        // persistSession parameter has been removed - session persistence is now always enabled
       ),
     );
 
-    client = Supabase.instance.client;
+    _client = Supabase.instance.client;
   }
 
   // Auth methods
@@ -34,41 +33,44 @@ class SupabaseService {
     required String password,
     required Map<String, dynamic> userData,
   }) async {
-    final AuthResponse res = await client.auth.signUp(
-      email: email,
-      password: password,
-      data: userData,
-    ).timeout(_timeoutDuration);
-
-    if (res.user != null) {
-      try {
-        final patientData = {
-          'patient_id': res.user!.id,
+    try {
+      // 1. Create auth user
+      final authResponse = await _client.auth.signUp(
+        email: email,
+        password: password,
+        data: {
           'email': email,
-          'first_name': userData['first_name'],
-          'middle_name': userData['middle_name'],
-          'last_name': userData['last_name'],
-          'username': userData['username'] ?? email.split('@')[0],
-          'sex': userData['sex'],
-        };
+          'full_name': '${userData['first_name']} ${userData['last_name']}',
+        },
+      );
 
-        await client.from('patient')
-          .insert(patientData)
-          .timeout(_timeoutDuration);
-      } catch (e) {
-        await client.auth.signOut(); // Rollback if profile creation fails
-        rethrow;
+      if (authResponse.user == null) {
+        throw Exception("User registration failed");
       }
-    }
 
-    return res;
+      // 2. Generate patient number
+      final patientNumber = await _generatePatientNumber();
+
+      // 3. Insert into patient table
+      await _client.from('patient').insert({
+        'patient_id': authResponse.user!.id,
+        'patient_number': patientNumber,
+        'email': email,
+        ...userData,
+      });
+
+      return authResponse;
+    } catch (e) {
+      // Consider adding error logging here
+      rethrow;
+    }
   }
 
   Future<AuthResponse> signIn({
     required String email,
     required String password,
   }) async {
-    return await client.auth.signInWithPassword(
+    return await _client.auth.signInWithPassword(
       email: email,
       password: password,
     ).timeout(_timeoutDuration);
@@ -76,71 +78,133 @@ class SupabaseService {
 
   Future<void> signOut() async {
     try {
-      await client.auth.signOut().timeout(const Duration(seconds: 5));
+      await _client.auth.signOut().timeout(const Duration(seconds: 5));
     } catch (e) {
       // Force clear local session if timeout occurs
-      await client.auth.signOut(); // clearSession has been renamed to signOut
+      await _client.auth.signOut();
       rethrow;
     }
   }
 
   Future<void> resetPassword(String email) async {
-    await client.auth.resetPasswordForEmail(email)
+    await _client.auth.resetPasswordForEmail(email)
       .timeout(_timeoutDuration);
   }
 
   // Patient methods
-  Future<Map<String, dynamic>?> getPatientProfile(String patientId) async {
-    final response = await client.from('patient')
-      .select()
-      .eq('patient_id', patientId)
-      .single()
-      .timeout(_timeoutDuration);
+  Future<String> _generatePatientNumber() async {
+    final currentYear = DateTime.now().year.toString();
+    final response = await _client
+        .from('patient')
+        .select('patient_number')
+        .like('patient_number', '$currentYear-%')
+        .order('patient_number', ascending: false)
+        .limit(1)
+        .timeout(_timeoutDuration);
+    
+    if (response.isEmpty) {
+      return '$currentYear-0001';
+    }
+    
+    final lastNumber = response[0]['patient_number'] as String;
+    final sequence = int.parse(lastNumber.split('-')[1]) + 1;
+    return '$currentYear-${sequence.toString().padLeft(4, '0')}';
+  }
 
-    return response;
+  Future<Map<String, dynamic>> registerPatient(Map<String, dynamic> patientData) async {
+    try {
+      final patientNumber = await _generatePatientNumber();
+      final response = await _client
+          .from('patient')
+          .insert({
+            ...patientData,
+            'patient_number': patientNumber,
+          })
+          .select()
+          .single()
+          .timeout(_timeoutDuration);
+      
+      return response;
+    } catch (e) {
+      throw Exception('Failed to register patient: ${e.toString()}');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getPatientProfile(String patientId) async {
+    try {
+      final response = await _client.from('patient')
+        .select()
+        .eq('patient_id', patientId)
+        .maybeSingle()
+        .timeout(_timeoutDuration);
+
+      return response;
+    } catch (e) {
+      throw Exception('Failed to fetch patient profile: ${e.toString()}');
+    }
   }
 
   Future<void> updatePatientProfile(
     String patientId,
     Map<String, dynamic> data,
   ) async {
-    await client.from('patient')
-      .update(data)
-      .eq('patient_id', patientId)
-      .timeout(_timeoutDuration);
+    try {
+      await _client.from('patient')
+        .update(data)
+        .eq('patient_id', patientId)
+        .timeout(_timeoutDuration);
+    } catch (e) {
+      throw Exception('Failed to update patient profile: ${e.toString()}');
+    }
   }
 
   // Medical History methods
   Future<void> addMedicalHistory(Map<String, dynamic> data) async {
-    await client.from('medical_history')
-      .insert(data)
-      .timeout(_timeoutDuration);
+    try {
+      await _client.from('medical_history')
+        .insert(data)
+        .timeout(_timeoutDuration);
+    } catch (e) {
+      throw Exception('Failed to add medical history: ${e.toString()}');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getMedicalHistory(String patientId) async {
-    final response = await client.from('medical_history')
-      .select()
-      .eq('patient_id', patientId)
-      .order('date', ascending: false)
-      .timeout(_timeoutDuration);
+    try {
+      final response = await _client.from('medical_history')
+        .select()
+        .eq('patient_id', patientId)
+        .order('date', ascending: false)
+        .timeout(_timeoutDuration);
 
-    return List<Map<String, dynamic>>.from(response);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('Failed to get medical history: ${e.toString()}');
+    }
   }
 
   // Appointment methods
   Future<void> createAppointment(Map<String, dynamic> data) async {
-    await client.from('appointment')
-      .insert(data)
-      .timeout(_timeoutDuration);
+    try {
+      await _client.from('appointment')
+        .insert(data)
+        .timeout(_timeoutDuration);
+    } catch (e) {
+      throw Exception('Failed to create appointment: ${e.toString()}');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAppointments(String patientId) async {
-    final response = await client.from('appointment')
-      .select()
-      .eq('patient_id', patientId)
-      .order('appointment_date', ascending: true)
-      .timeout(_timeoutDuration);
+    try {
+      final response = await _client.from('appointment')
+        .select()
+        .eq('patient_id', patientId)
+        .order('appointment_date', ascending: true)
+        .timeout(_timeoutDuration);
 
-    return List<Map<String, dynamic>>.from(response);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('Failed to get appointments: ${e.toString()}');
+    }
   }
 }

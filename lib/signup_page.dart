@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intimacare_client/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -10,6 +11,7 @@ class SignUpPage extends StatefulWidget {
 
 class _SignUpPageState extends State<SignUpPage> {
   final _formKey = GlobalKey<FormState>();
+  final _supabaseService = SupabaseService();
   bool _formSubmitted = false;
 
   final _firstNameController = TextEditingController();
@@ -31,6 +33,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   final List<String> _sexOptions = ['Male', 'Female'];
   final Set<String> _touchedFields = {};
+  final Set<String> _typingFields = {};
 
   bool _noMiddleName = false;
   String? _middleNameValidationError;
@@ -99,26 +102,42 @@ class _SignUpPageState extends State<SignUpPage> {
     });
 
     try {
-      final userData = {
-        'first_name': _firstNameController.text.trim(),
-        'middle_name': _noMiddleName ? 'N/A' : _middleNameController.text.trim(),
-        'last_name': _lastNameController.text.trim(),
-        'sex': _selectedSex,
-        'username': _emailController.text.split('@')[0],
-      };
-
-      final response = await SupabaseService().signUp(
+      await _supabaseService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        userData: userData,
+        userData: {
+          'first_name': _firstNameController.text.trim(),
+          'middle_name': _noMiddleName ? 'N/A' : _middleNameController.text.trim(),
+          'last_name': _lastNameController.text.trim(),
+          'sex': _selectedSex,
+          'email': _emailController.text.trim(),
+          'username': _emailController.text.split('@')[0],
+        },
       );
 
-      if (response.user != null && mounted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration successful!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
         Navigator.pushNamed(context, '/confirmation');
       }
+    } on PostgrestException catch (e) {
+      setState(() {
+        _errorMessage = 'Registration failed. Please try again.';
+      });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Sign up failed. Please check your information and try again.';
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        // Make error messages more user-friendly
+        if (_errorMessage!.contains('User already registered')) {
+          _errorMessage = 'This email is already registered. Please use a different email.';
+        } else if (_errorMessage!.contains('row-level security policy')) {
+          _errorMessage = 'Registration failed due to security restrictions. Please contact support.';
+        }
       });
     } finally {
       if (mounted) {
@@ -149,7 +168,7 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   String? _getFieldError(String fieldName) {
-    if (_formSubmitted || _touchedFields.contains(fieldName)) {
+    if (_formSubmitted) {
       if (_isFieldEmpty(fieldName)) {
         if (fieldName == 'firstName' || fieldName == 'lastName') {
           return 'This field is required';
@@ -187,8 +206,8 @@ class _SignUpPageState extends State<SignUpPage> {
     bool showMiddleNameCheckbox = false,
   }) {
     final errorText = _getFieldError(fieldName);
-    final showRequirements = (isPassword && (_formSubmitted || _touchedFields.contains(fieldName)));
-    final showEmailValidation = (fieldName == 'email' && (_formSubmitted || _touchedFields.contains(fieldName)));
+    final showRequirements = isPassword && _typingFields.contains(fieldName);
+    final showEmailValidation = fieldName == 'email' && _typingFields.contains(fieldName);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,9 +262,10 @@ class _SignUpPageState extends State<SignUpPage> {
             if (isPassword) _validatePassword(value);
             if (fieldName == 'email') _validateEmail(value);
             setState(() {
-              _touchedFields.add(fieldName);
-              if (fieldName == 'middleName' && value.isNotEmpty) {
-                _middleNameValidationError = null;
+              if (value.isNotEmpty) {
+                _typingFields.add(fieldName);
+              } else {
+                _typingFields.remove(fieldName);
               }
             });
           },
