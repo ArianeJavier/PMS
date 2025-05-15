@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intimacare_client/home.dart';
 import 'package:intimacare_client/services/supabase_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'verification_page.dart';
@@ -36,14 +36,16 @@ void main() async {
 
 Future<void> setupDeepLinks() async {
   try {
+    final appLinks = AppLinks();
+
     // Handle initial link if app was terminated
-    final initialUri = await getInitialUri();
+    final initialUri = await appLinks.getInitialLink();  // Changed from getInitialAppLink
     if (initialUri != null) {
       _handleDeepLink(initialUri);
     }
 
     // Listen for incoming links while app is running
-    uriLinkStream.listen((Uri? uri) {
+    appLinks.uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
         _handleDeepLink(uri);
       }
@@ -54,9 +56,9 @@ Future<void> setupDeepLinks() async {
 }
 
 void _handleDeepLink(Uri uri) {
-  print("Handling deep link: ${uri.toString()}");
-  // You can add more sophisticated handling here if needed
-  // For example, parse query parameters or different paths
+  // Your deep link handling logic here
+  print("Deep link received: ${uri.path}");
+  // You might want to navigate to specific screens based on the URI
 }
 
 class IntimaCareApp extends StatelessWidget {
@@ -126,28 +128,28 @@ class _EmailConfirmationPageState extends State<EmailConfirmationPage> {
   }
 
   Future<void> _handleEmailConfirmation() async {
-    try {
-      // Use the deep link URI if provided, otherwise try to get it from the intent
-      final uri = widget.deepLinkUri ?? await getInitialUri();
-      
-      if (uri != null) {
-        await Supabase.instance.client.auth.getSessionFromUrl(uri);
-        setState(() {
-          _isProcessing = false;
-        });
-      } else {
-        setState(() {
-          _isProcessing = false;
-          _errorMessage = 'No confirmation link found';
-        });
-      }
-    } catch (e) {
+  try {
+    // Use the deep link URI if provided, otherwise try to get it from the intent
+    final uri = widget.deepLinkUri ?? await AppLinks().getInitialLink();  // Changed from getInitialUri
+    
+    if (uri != null) {
+      await Supabase.instance.client.auth.getSessionFromUrl(uri);
       setState(() {
         _isProcessing = false;
-        _errorMessage = e.toString();
+      });
+    } else {
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = 'No confirmation link found';
       });
     }
+  } catch (e) {
+    setState(() {
+      _isProcessing = false;
+      _errorMessage = e.toString();
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
