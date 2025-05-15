@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intimacare_client/prescription_page.dart';
+import 'package:intimacare_client/home.dart';
 import 'package:intimacare_client/profile.dart';
 
 class AppointmentPage extends StatefulWidget {
@@ -30,6 +32,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
   bool isLoading = false;
   String notesText = '';
   String _userSex = 'female';
+  bool _isLoading = false;
 
   // Controller for notes text field
   final notesController = TextEditingController();
@@ -42,7 +45,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
 
   Future<void> _loadUserData() async {
     setState(() {
-      isLoading = true;
+      _isLoading = true;
     });
 
     try {
@@ -64,7 +67,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
       debugPrint('Error loading user data: $e');
     } finally {
       setState(() {
-        isLoading = false;
+        _isLoading = false;
       });
     }
   }
@@ -214,49 +217,6 @@ class _AppointmentPageState extends State<AppointmentPage> {
         });
       }
     }
-  }
-
-  Widget _buildLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: Colors.black87,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdown({
-    required String? value,
-    required List<String> items,
-    required String hint,
-    required void Function(String?)? onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: DropdownButton<String>(
-        value: value,
-        hint: Text(hint),
-        isExpanded: true,
-        underline: Container(),
-        items: items.map((String item) {
-          return DropdownMenuItem<String>(
-            value: item,
-            child: Text(item),
-          );
-        }).toList(),
-        onChanged: onChanged,
-      ),
-    );
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -422,6 +382,304 @@ class _AppointmentPageState extends State<AppointmentPage> {
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 245, 245, 245),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildAppBar(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Colors.red),
+                    )
+                  : _buildMainContent(),
+            ),
+            _buildBottomNavigation(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Expanded(
+            child: Text(
+              'IntimaCare',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Color.fromARGB(255, 197, 0, 0),
+              ),
+            ),
+          ),
+          ProfileIconWithDropdown(userSex: _userSex),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainContent() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Set Appointment',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w600,
+              color: Colors.red,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Patient Type
+          _buildLabelText('Type of Patient'),
+          const SizedBox(height: 8),
+          _buildDropdown(
+            value: selectedPatientType,
+            items: patientTypes,
+            hint: 'Select type of Patient',
+            onChanged: (value) {
+              setState(() {
+                selectedPatientType = value;
+              });
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // Purpose
+          _buildLabelText('Purpose'),
+          const SizedBox(height: 8),
+          _buildDropdown(
+            value: selectedPurpose,
+            items: appointmentPurposes,
+            hint: 'Select purpose of appointment',
+            onChanged: (value) {
+              setState(() {
+                selectedPurpose = value;
+              });
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // Date picker
+          _buildLabelText('Date'),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _selectDate(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    selectedDate == null
+                        ? 'Select date'
+                        : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
+                    style: TextStyle(
+                      color: selectedDate == null ? Colors.grey[600] : Colors.black,
+                    ),
+                  ),
+                  const Icon(Icons.calendar_today, color: Colors.red),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Time picker
+          _buildLabelText('Time'),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _selectTime(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 15,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    selectedTime == null
+                        ? 'Select time'
+                        : '${selectedTime!.hour}:${selectedTime!.minute.toString().padLeft(2, '0')} ${selectedTime!.period.name.toUpperCase()}',
+                    style: TextStyle(
+                      color: selectedTime == null ? Colors.grey[600] : Colors.black,
+                    ),
+                  ),
+                  const Icon(Icons.access_time, color: Colors.red),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 30),
+
+          // Notes
+          _buildLabelText('Notes (Optional)'),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: notesController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Add any additional information',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.all(15),
+              ),
+              onChanged: (value) {
+                notesText = value;
+              },
+            ),
+          ),
+          const SizedBox(height: 30),
+
+          // Submit button
+          Center(
+            child: Container(
+              width: double.infinity,
+              height: 55,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _saveAppointment,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 3,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.calendar_today, color: Colors.white),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Set Appointment',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabelText(String label) {
+    return Text(
+      label,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87),
+    );
+  }
+
+  Widget _buildDropdown({
+    required String? value,
+    required List<String> items,
+    required String hint,
+    required void Function(String?)? onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: DropdownButton<String>(
+        value: value,
+        hint: Text(hint),
+        isExpanded: true,
+        underline: Container(),
+        items: items.map((String item) {
+          return DropdownMenuItem<String>(value: item, child: Text(item));
+        }).toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
   Widget _buildBottomNavigation() {
     return Container(
       height: 65,
@@ -429,9 +687,9 @@ class _AppointmentPageState extends State<AppointmentPage> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withAlpha(25),
+            color: Colors.grey.withOpacity(0.1),
             spreadRadius: 1,
-            blurRadius: 5,
+            blurRadius: 3,
             offset: const Offset(0, -1),
           ),
         ],
@@ -443,7 +701,9 @@ class _AppointmentPageState extends State<AppointmentPage> {
             Icons.calendar_today,
             'Appointment',
             isSelected: true,
-            onTap: () {},
+            onTap: () {
+              // Already on appointment page
+            },
           ),
           _buildNavItem(
             Icons.home,
@@ -491,156 +751,6 @@ class _AppointmentPageState extends State<AppointmentPage> {
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Book Appointment'),
-        actions: [
-          ProfileIconWithDropdown(userSex: _userSex),
-        ],
-      ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildLabel('Type of Patient'),
-                  _buildDropdown(
-                    value: selectedPatientType,
-                    items: patientTypes,
-                    hint: 'Select patient type',
-                    onChanged: (value) {
-                      setState(() {
-                        selectedPatientType = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLabel('Purpose of Appointment'),
-                  _buildDropdown(
-                    value: selectedPurpose,
-                    items: appointmentPurposes,
-                    hint: 'Select purpose',
-                    onChanged: (value) {
-                      setState(() {
-                        selectedPurpose = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLabel('Appointment Date'),
-                  InkWell(
-                    onTap: () => _selectDate(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 15, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.calendar_today,
-                              color: Colors.grey.shade600),
-                          const SizedBox(width: 10),
-                          Text(
-                            selectedDate == null
-                                ? 'Select date'
-                                : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
-                            style: TextStyle(
-                              color: selectedDate == null
-                                  ? Colors.grey.shade600
-                                  : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLabel('Appointment Time'),
-                  InkWell(
-                    onTap: selectedDate == null
-                        ? null
-                        : () => _selectTime(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 15, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.access_time,
-                              color: Colors.grey.shade600),
-                          const SizedBox(width: 10),
-                          Text(
-                            selectedTime == null
-                                ? 'Select time'
-                                : selectedTime!.format(context),
-                            style: TextStyle(
-                              color: selectedTime == null
-                                  ? Colors.grey.shade600
-                                  : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLabel('Additional Notes (Optional)'),
-                  TextField(
-                    controller: notesController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Enter any additional information...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        notesText = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onPressed: _saveAppointment,
-                      child: const Text(
-                        'Book Appointment',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-      bottomNavigationBar: _buildBottomNavigation(),
-    );
-  }
 }
 
 class ProfileIconWithDropdown extends StatelessWidget {
@@ -660,7 +770,7 @@ class ProfileIconWithDropdown extends StatelessWidget {
         height: 40,
         width: 40,
         decoration: BoxDecoration(
-          color: Colors.red.withAlpha(25),
+          color: Colors.red.withOpacity(0.1),
           shape: BoxShape.circle,
         ),
         child: ClipOval(
@@ -688,7 +798,7 @@ class ProfileIconWithDropdown extends StatelessWidget {
                 height: 24,
                 width: 24,
                 decoration: BoxDecoration(
-                  color: Colors.red.withAlpha(25),
+                  color: Colors.red.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: ClipOval(

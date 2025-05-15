@@ -92,7 +92,34 @@ class _SignUpPageState extends State<SignUpPage> {
       }
     });
 
-    if (_middleNameValidationError != null || !_formKey.currentState!.validate()) {
+    // Check if any required field is empty or invalid
+    bool hasEmptyFields = _firstNameController.text.isEmpty ||
+        _lastNameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _passwordController.text.isEmpty ||
+        _selectedSex == null ||
+        (!_noMiddleName && _middleNameController.text.isEmpty);
+
+    bool hasInvalidFields = !_isEmailValid || 
+        !(_isPasswordLongEnough && _hasLowerCase && _hasUpperCase && _hasNumberOrSymbol);
+
+    if (hasEmptyFields || hasInvalidFields || _middleNameValidationError != null) {
+      // Show alert dialog if there are empty or invalid fields
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Missing Information'),
+            content: const Text('Please fill in all required fields with valid information.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
       return;
     }
 
@@ -132,7 +159,6 @@ class _SignUpPageState extends State<SignUpPage> {
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
-        // Make error messages more user-friendly
         if (_errorMessage!.contains('User already registered')) {
           _errorMessage = 'This email is already registered. Please use a different email.';
         } else if (_errorMessage!.contains('row-level security policy')) {

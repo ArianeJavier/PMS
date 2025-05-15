@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
-  late final SupabaseClient _client;
+  late final SupabaseClient client; // Changed from _client to client (public)
   static const _timeoutDuration = Duration(seconds: 10);
 
   factory SupabaseService() {
@@ -24,7 +24,7 @@ class SupabaseService {
       ),
     );
 
-    _client = Supabase.instance.client;
+    client = Supabase.instance.client;
   }
 
   // Auth methods
@@ -34,8 +34,7 @@ class SupabaseService {
     required Map<String, dynamic> userData,
   }) async {
     try {
-      // 1. Create auth user
-      final authResponse = await _client.auth.signUp(
+      final authResponse = await client.auth.signUp(
         email: email,
         password: password,
         data: {
@@ -48,11 +47,8 @@ class SupabaseService {
         throw Exception("User registration failed");
       }
 
-      // 2. Generate patient number
       final patientNumber = await _generatePatientNumber();
-
-      // 3. Insert into patient table
-      await _client.from('patient').insert({
+      await client.from('patient').insert({
         'patient_id': authResponse.user!.id,
         'patient_number': patientNumber,
         'email': email,
@@ -61,7 +57,6 @@ class SupabaseService {
 
       return authResponse;
     } catch (e) {
-      // Consider adding error logging here
       rethrow;
     }
   }
@@ -70,7 +65,7 @@ class SupabaseService {
     required String email,
     required String password,
   }) async {
-    return await _client.auth.signInWithPassword(
+    return await client.auth.signInWithPassword(
       email: email,
       password: password,
     ).timeout(_timeoutDuration);
@@ -78,23 +73,21 @@ class SupabaseService {
 
   Future<void> signOut() async {
     try {
-      await _client.auth.signOut().timeout(const Duration(seconds: 5));
+      await client.auth.signOut().timeout(const Duration(seconds: 5));
     } catch (e) {
-      // Force clear local session if timeout occurs
-      await _client.auth.signOut();
+      await client.auth.signOut();
       rethrow;
     }
   }
 
   Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email)
+    await client.auth.resetPasswordForEmail(email)
       .timeout(_timeoutDuration);
   }
 
-  // Patient methods
   Future<String> _generatePatientNumber() async {
     final currentYear = DateTime.now().year.toString();
-    final response = await _client
+    final response = await client
         .from('patient')
         .select('patient_number')
         .like('patient_number', '$currentYear-%')
@@ -102,9 +95,7 @@ class SupabaseService {
         .limit(1)
         .timeout(_timeoutDuration);
     
-    if (response.isEmpty) {
-      return '$currentYear-0001';
-    }
+    if (response.isEmpty) return '$currentYear-0001';
     
     final lastNumber = response[0]['patient_number'] as String;
     final sequence = int.parse(lastNumber.split('-')[1]) + 1;
@@ -114,7 +105,7 @@ class SupabaseService {
   Future<Map<String, dynamic>> registerPatient(Map<String, dynamic> patientData) async {
     try {
       final patientNumber = await _generatePatientNumber();
-      final response = await _client
+      final response = await client
           .from('patient')
           .insert({
             ...patientData,
@@ -123,7 +114,6 @@ class SupabaseService {
           .select()
           .single()
           .timeout(_timeoutDuration);
-      
       return response;
     } catch (e) {
       throw Exception('Failed to register patient: ${e.toString()}');
@@ -132,24 +122,20 @@ class SupabaseService {
 
   Future<Map<String, dynamic>?> getPatientProfile(String patientId) async {
     try {
-      final response = await _client.from('patient')
+      final response = await client.from('patient')
         .select()
         .eq('patient_id', patientId)
         .maybeSingle()
         .timeout(_timeoutDuration);
-
       return response;
     } catch (e) {
       throw Exception('Failed to fetch patient profile: ${e.toString()}');
     }
   }
 
-  Future<void> updatePatientProfile(
-    String patientId,
-    Map<String, dynamic> data,
-  ) async {
+  Future<void> updatePatientProfile(String patientId, Map<String, dynamic> data) async {
     try {
-      await _client.from('patient')
+      await client.from('patient')
         .update(data)
         .eq('patient_id', patientId)
         .timeout(_timeoutDuration);
@@ -158,10 +144,9 @@ class SupabaseService {
     }
   }
 
-  // Medical History methods
   Future<void> addMedicalHistory(Map<String, dynamic> data) async {
     try {
-      await _client.from('medical_history')
+      await client.from('medical_history')
         .insert(data)
         .timeout(_timeoutDuration);
     } catch (e) {
@@ -171,22 +156,20 @@ class SupabaseService {
 
   Future<List<Map<String, dynamic>>> getMedicalHistory(String patientId) async {
     try {
-      final response = await _client.from('medical_history')
+      final response = await client.from('medical_history')
         .select()
         .eq('patient_id', patientId)
         .order('date', ascending: false)
         .timeout(_timeoutDuration);
-
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to get medical history: ${e.toString()}');
     }
   }
 
-  // Appointment methods
   Future<void> createAppointment(Map<String, dynamic> data) async {
     try {
-      await _client.from('appointment')
+      await client.from('appointment')
         .insert(data)
         .timeout(_timeoutDuration);
     } catch (e) {
@@ -196,12 +179,11 @@ class SupabaseService {
 
   Future<List<Map<String, dynamic>>> getAppointments(String patientId) async {
     try {
-      final response = await _client.from('appointment')
+      final response = await client.from('appointment')
         .select()
         .eq('patient_id', patientId)
         .order('appointment_date', ascending: true)
         .timeout(_timeoutDuration);
-
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to get appointments: ${e.toString()}');
